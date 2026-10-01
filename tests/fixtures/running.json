@@ -1,0 +1,16 @@
+{
+  "body": {
+    "completed_at": null,
+    "created_at": "2026-10-01T01:04:44.261197Z",
+    "effort": "low",
+    "error": null,
+    "id": "task_run_a6b22e6eeac743c8b45cb8a8da25e203",
+    "interaction_id": "task_run_a6b22e6eeac743c8b45cb8a8da25e203",
+    "is_active": true,
+    "prompt": "What did the European Commission publish about general-purpose AI obligations under the EU AI Act in September 2026?",
+    "started_at": "2026-10-01T01:04:44.374337Z",
+    "status": "running",
+    "web_search_agent_id": "wsa_90c3bd22d6c047de934183870880b37f"
+  },
+  "status_code": 200
+}

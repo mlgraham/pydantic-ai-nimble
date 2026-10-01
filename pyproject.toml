@@ -1,0 +1,52 @@
+[project]
+name = "pydantic-ai-nimble"
+version = "0.1.0"
+description = "Nimble's Web Search Agent as a PydanticAI toolset: cited answers from the live web in one line of configuration"
+authors = [{ name = "Michael Graham" }]
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.11"
+keywords = ["pydantic-ai", "nimble", "web-search", "agents", "tools"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+dependencies = [
+    "httpx>=0.28.1",
+    "pydantic-ai>=2.52.0",
+]
+
+[project.urls]
+Repository = "https://github.com/mlgraham/pydantic-ai-nimble"
+Nimble = "https://docs.nimbleway.com"
+PydanticAI = "https://ai.pydantic.dev"
+
+[build-system]
+requires = ["uv_build>=0.12.0,<0.13.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+    "pytest-asyncio>=1.4.0",
+    "respx>=0.23.1",
+    "ruff>=0.16.9",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]

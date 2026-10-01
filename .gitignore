@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.pyc
+*.egg-info/
+build/
+dist/
+.venv/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# secrets and local files
+.env
+.DS_Store
+node_modules/
+
+# private working state (never pushed)
+.docs
+.scripts
+*.md
+!README.md

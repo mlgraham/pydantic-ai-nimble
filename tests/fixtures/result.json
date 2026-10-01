@@ -1,0 +1,232 @@
+{
+  "body": {
+    "output": {
+      "content": "# European Commission Publications on General-Purpose AI Obligations (as of September 2026)\n\nBy September 2026, the European Commission's key publications addressing GPAI obligations under the AI Act included:\n\n## Guidelines on the Scope of Obligations\n\nThe Commission issued formal **Guidelines on the scope of obligations for providers of general-purpose AI models under the AI Act**, clarifying which providers fall within scope and what they must do. The guidelines clarify that GPAI obligations entered into application on 2 August 2025, with Article 50 transparency duties applying from 2 August 2026 and Articles 53\u201356 GPAI obligations actively enforceable [1][2].\n\nThe guidelines cover core requirements including:\n- Provision of technical documentation to authorities and downstream providers\n- Compliance with EU copyright law\n- Publication of summaries of training data content\n- The principle that only significant model modifications trigger provider obligations\n- Special rules for free/open-source GPAI providers (limited mainly to copyright and training-summary duties) and additional obligations (evaluations, adversarial testing, incident reporting, cybersecurity) for models presenting systemic risk (e.g., trained above 10^25 FLOPs) [2][3].\n\nThe guidelines are downloadable in all 24 EU official languages, accompanied by a **Communication approving the content of the guidelines** (in English) [4].\n\n## General-Purpose AI Code of Practice\n\nThe Commission and the AI Board confirmed that the **General-Purpose AI Code of Practice** is an **adequate voluntary tool** for providers of GPAI models to demonstrate compliance with the AI Act. The Code focuses on Articles 53 and 55 regarding transparency requirements [5][6]. The Code of Practice is **in force as of 9 September 2026** [7].\n\n## Related Press Releases and Communications\n\n- **31 July 2026 press release**: Announced the Commission would begin enforcing AI Act rules and new transparency requirements starting 2 August 2026 [8].\n- **1 September 2026**: The Commission confirmed it had written to more than a certain number of providers regarding compliance with the AI Act [9].\n- **29 September 2026 press release**: Appeared on the Commission's AI policy page but concerned copyright rather than GPAI obligations specifically [8].\n\n## Status as of 15 September 2026\n\nAs of mid-September 2026, the EU AI Act was in its active 2026 enforcement phase, with Article 50 transparency duties applicable from 2 August 2026, new prohibited-practice dates landing on 2 December 2026, and Annex III high-risk system obligations using 2 December 2027 as the key date [2].\n\n---\n\nSource index:\n  [1] Guidelines for providers of general-purpose AI models \u2014 https://digital-strategy.ec.europa.eu/en/policies/guidelines-gpai-providers  (official)\n  [2] EU AI Act 2026: Deadlines, Penalties & Checklist \u2014 https://decodethefuture.org/en/eu-ai-act-explained  (official)\n  [3] Guidelines on obligations for General-Purpose AI providers \u2014 https://digital-strategy.ec.europa.eu/en/faqs/guidelines-obligations-general-purpose-ai-providers  (official)\n  [4] Guidelines on the scope of obligations for providers of general-purpose AI models under the AI Act \u2014 https://digital-strategy.ec.europa.eu/en/library/guidelines-scope-obligations-providers-general-purpose-ai-models-under-ai-act  (official)\n  [5] The General-Purpose AI Code of Practice \u2014 https://digital-strategy.ec.europa.eu/en/policies/contents-code-gpai  (news)\n  [6] European Commission Issues Guidelines for Providers of General-Purpose AI Models \u2014 https://wilmerhale.com/en/insights/blogs/wilmerhale-privacy-and-cybersecurity-law/20250724-european-commission-issues-guidelines-for-providers-of-general-purpose-ai-models  (news)\n  [7] EU General-Purpose AI Code of Practice \u2014 https://regulations.ai/regulations/RAI-EU-NA-GACPVXX-2025  (news)\n  [8] European approach to artificial intelligence \u2014 https://digital-strategy.ec.europa.eu/en/policies/european-approach-artificial-intelligence  (official)\n  [9] EU AI Act Security Requirements for 2026 \u2014 https://securing.ai/eu-ai-act-security-requirements  (official)",
+      "trust": {
+        "claims": [
+          {
+            "callout": 1,
+            "citations": [
+              {
+                "excerpts": null,
+                "extract_template_name": null,
+                "source_category": "official",
+                "source_intent": "official",
+                "source_type": "primary",
+                "title": "Guidelines for providers of general-purpose AI models",
+                "url": "https://digital-strategy.ec.europa.eu/en/policies/guidelines-gpai-providers"
+              },
+              {
+                "excerpts": null,
+                "extract_template_name": null,
+                "source_category": "official",
+                "source_intent": "official",
+                "source_type": "primary",
+                "title": "EU AI Act 2026: Deadlines, Penalties & Checklist",
+                "url": "https://decodethefuture.org/en/eu-ai-act-explained"
+              }
+            ],
+            "confidence": "high",
+            "reasoning": "Backed by a primary source (official)"
+          },
+          {
+            "callout": 5,
+            "citations": [
+              {
+                "excerpts": null,
+                "extract_template_name": null,
+                "source_category": "news",
+                "source_intent": "news",
+                "source_type": "primary",
+                "title": "The General-Purpose AI Code of Practice",
+                "url": "https://digital-strategy.ec.europa.eu/en/policies/contents-code-gpai"
+              },
+              {
+                "excerpts": null,
+                "extract_template_name": null,
+                "source_category": "news",
+                "source_intent": "news",
+                "source_type": "primary",
+                "title": "European Commission Issues Guidelines for Providers of General-Purpose AI Models",
+                "url": "https://wilmerhale.com/en/insights/blogs/wilmerhale-privacy-and-cybersecurity-law/20250724-european-commission-issues-guidelines-for-providers-of-general-purpose-ai-models"
+              }
+            ],
+            "confidence": "high",
+            "reasoning": "Backed by a primary source (news)"
+          },
+          {
+            "callout": 3,
+            "citations": [
+              {
+                "excerpts": null,
+                "extract_template_name": null,
+                "source_category": "official",
+                "source_intent": "official",
+                "source_type": "primary",
+                "title": "Guidelines on obligations for General-Purpose AI providers",
+                "url": "https://digital-strategy.ec.europa.eu/en/faqs/guidelines-obligations-general-purpose-ai-providers"
+              }
+            ],
+            "confidence": "high",
+            "reasoning": "Backed by a primary source (official)"
+          },
+          {
+            "callout": 4,
+            "citations": [
+              {
+                "excerpts": null,
+                "extract_template_name": null,
+                "source_category": "official",
+                "source_intent": "official",
+                "source_type": "primary",
+                "title": "Guidelines on the scope of obligations for providers of general-purpose AI models under the AI Act",
+                "url": "https://digital-strategy.ec.europa.eu/en/library/guidelines-scope-obligations-providers-general-purpose-ai-models-under-ai-act"
+              }
+            ],
+            "confidence": "high",
+            "reasoning": "Backed by a primary source (official)"
+          },
+          {
+            "callout": 7,
+            "citations": [
+              {
+                "excerpts": null,
+                "extract_template_name": null,
+                "source_category": "news",
+                "source_intent": "news",
+                "source_type": "primary",
+                "title": "EU General-Purpose AI Code of Practice",
+                "url": "https://regulations.ai/regulations/RAI-EU-NA-GACPVXX-2025"
+              }
+            ],
+            "confidence": "high",
+            "reasoning": "Backed by a primary source (news)"
+          },
+          {
+            "callout": 8,
+            "citations": [
+              {
+                "excerpts": null,
+                "extract_template_name": null,
+                "source_category": "official",
+                "source_intent": "official",
+                "source_type": "primary",
+                "title": "European approach to artificial intelligence",
+                "url": "https://digital-strategy.ec.europa.eu/en/policies/european-approach-artificial-intelligence"
+              }
+            ],
+            "confidence": "high",
+            "reasoning": "Backed by a primary source (official)"
+          },
+          {
+            "callout": 9,
+            "citations": [
+              {
+                "excerpts": null,
+                "extract_template_name": null,
+                "source_category": "official",
+                "source_intent": "official",
+                "source_type": "primary",
+                "title": "EU AI Act Security Requirements for 2026",
+                "url": "https://securing.ai/eu-ai-act-security-requirements"
+              }
+            ],
+            "confidence": "high",
+            "reasoning": "Backed by a primary source (official)"
+          }
+        ],
+        "confidence": "high",
+        "reasoning": "The important claims directly addressing the goal\u2014all of which are official EU Commission sources covering guidelines and the Code of Practice for general-purpose AI obligations\u2014are all rated high trust, supporting high run-level confidence.",
+        "sources": [
+          {
+            "extract_template_name": null,
+            "source_category": "official",
+            "source_intent": null,
+            "title": "Guidelines for providers of general-purpose AI models",
+            "type": "primary",
+            "url": "https://digital-strategy.ec.europa.eu/en/policies/guidelines-gpai-providers"
+          },
+          {
+            "extract_template_name": null,
+            "source_category": "official",
+            "source_intent": null,
+            "title": "EU AI Act 2026: Deadlines, Penalties & Checklist",
+            "type": "primary",
+            "url": "https://decodethefuture.org/en/eu-ai-act-explained"
+          },
+          {
+            "extract_template_name": null,
+            "source_category": "news",
+            "source_intent": null,
+            "title": "The General-Purpose AI Code of Practice",
+            "type": "primary",
+            "url": "https://digital-strategy.ec.europa.eu/en/policies/contents-code-gpai"
+          },
+          {
+            "extract_template_name": null,
+            "source_category": "news",
+            "source_intent": null,
+            "title": "European Commission Issues Guidelines for Providers of General-Purpose AI Models",
+            "type": "primary",
+            "url": "https://wilmerhale.com/en/insights/blogs/wilmerhale-privacy-and-cybersecurity-law/20250724-european-commission-issues-guidelines-for-providers-of-general-purpose-ai-models"
+          },
+          {
+            "extract_template_name": null,
+            "source_category": "official",
+            "source_intent": null,
+            "title": "Guidelines on obligations for General-Purpose AI providers",
+            "type": "primary",
+            "url": "https://digital-strategy.ec.europa.eu/en/faqs/guidelines-obligations-general-purpose-ai-providers"
+          },
+          {
+            "extract_template_name": null,
+            "source_category": "official",
+            "source_intent": null,
+            "title": "Guidelines on the scope of obligations for providers of general-purpose AI models under the AI Act",
+            "type": "primary",
+            "url": "https://digital-strategy.ec.europa.eu/en/library/guidelines-scope-obligations-providers-general-purpose-ai-models-under-ai-act"
+          },
+          {
+            "extract_template_name": null,
+            "source_category": "news",
+            "source_intent": null,
+            "title": "EU General-Purpose AI Code of Practice",
+            "type": "primary",
+            "url": "https://regulations.ai/regulations/RAI-EU-NA-GACPVXX-2025"
+          },
+          {
+            "extract_template_name": null,
+            "source_category": "official",
+            "source_intent": null,
+            "title": "European approach to artificial intelligence",
+            "type": "primary",
+            "url": "https://digital-strategy.ec.europa.eu/en/policies/european-approach-artificial-intelligence"
+          },
+          {
+            "extract_template_name": null,
+            "source_category": "official",
+            "source_intent": null,
+            "title": "EU AI Act Security Requirements for 2026",
+            "type": "primary",
+            "url": "https://securing.ai/eu-ai-act-security-requirements"
+          }
+        ]
+      },
+      "type": "text"
+    },
+    "run": {
+      "completed_at": "2026-10-01T01:05:22.612319Z",
+      "created_at": "2026-10-01T01:04:44.261197Z",
+      "effort": "low",
+      "error": null,
+      "id": "task_run_a6b22e6eeac743c8b45cb8a8da25e203",
+      "interaction_id": "task_run_a6b22e6eeac743c8b45cb8a8da25e203",
+      "is_active": false,
+      "prompt": "What did the European Commission publish about general-purpose AI obligations under the EU AI Act in September 2026?",
+      "started_at": "2026-10-01T01:04:44.374337Z",
+      "status": "completed",
+      "web_search_agent_id": "wsa_90c3bd22d6c047de934183870880b37f"
+    }
+  },
+  "status_code": 200
+}
