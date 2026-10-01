@@ -1,6 +1,6 @@
 [project]
 name = "pydantic-ai-nimble"
-version = "0.1.2"
+version = "0.1.3"
 description = "Nimble's Web Search Agent as a PydanticAI toolset: cited answers from the live web in one line of configuration"
 authors = [{ name = "Michael Graham" }]
 readme = "README.md"

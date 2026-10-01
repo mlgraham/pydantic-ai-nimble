@@ -47,11 +47,13 @@ the model did not need to read.
 
 Failures map to one behavior each. A missing key raises `NimbleAuthError` when the toolset is constructed, before
 any model call; a rejected key raises it on the first tool call and is never retried. Reads (polling, fetching the
-result) are retried under the deadline. Creation is not: a create that Nimble answers with an error is reported as
-it is, and a create that gets no response raises `NimbleCreateAmbiguousError` to you, because a billable run may
-already exist. A timeout, or a read that keeps failing, carries the run id and gives the model one `ModelRetry`;
-calling the tool again with the same query collects that same run instead of starting another, and the handle
-stays in `toolset.pending` for `client.collect` if the agent gives up. Other 4xx responses propagate unchanged.
+result) are retried under the deadline. Creation is not. Nimble's billing table says only a 429 means nothing was
+created, so that one may be tried again; no response, a timeout (including the deadline expiring with the request
+in flight), a 408 or a 5xx is unknown and raises `NimbleCreateAmbiguousError` to you, because a billable run may
+already exist. Other 4xx on creation propagate unchanged. Once a run exists, a timeout or a read that keeps failing
+carries the run id and gives the model one `ModelRetry`; calling the tool again with the same query collects that
+same run instead of starting another, and the handle stays in `toolset.pending` for `client.collect` if the agent
+gives up. The retry prompt says so explicitly: changing the query starts a separate billable run.
 
 ## Why this shape
 
@@ -88,8 +90,9 @@ Mastra package; none of them targets PydanticAI's toolset interface, which is th
 - **A local timeout does not stop the run.** Nimble keeps working and bills it. This package keeps the handle so
   the result can still be collected, and never starts a replacement on its own.
 - **No streaming.** The run's progress events are not surfaced; the deadline is the only feedback during a run.
-- **Results live on the toolset instance.** `toolset.results` is per instance, not per agent run. Use
-  `on_result` or one toolset per run if you need isolation under concurrency.
+- **Results and recovery handles live on the toolset instance.** `toolset.results` and `toolset.pending` are per
+  instance, keyed by nothing more than the normalized query for `pending`. They are not a job store and do not
+  deduplicate across instances or processes. Use `on_result` or one toolset per run if you need isolation.
 - **Effort is capped at `high` in the tool schema.** Nimble's `x-high` is reachable through `NimbleClient`
   directly; it was left out of the model-facing enum because it can take many minutes. Low effort has measured
   17 to 51 s, medium over 90 s; raise `NIMBLE_DEADLINE_S` for high, as Nimble's own connectors advise.
@@ -118,5 +121,6 @@ pass by GPT 6 Pro over the first public revision found that the compact view had
 already numbered, that the example configuration dropped the API version from the base URL, and that timeout
 errors reported the wrong deadline. A second pass found that creation was replayed after a lost response, which
 Nimble's own connector documentation rules out, that the deadline did not bound a slowly streamed body, and that
-uncited low-confidence claims were dropped from the compact view. All of it is fixed in this revision. Every
-number in this README was measured, not estimated.
+uncited low-confidence claims were dropped from the compact view. A third pass confirmed those fixes and tightened
+two things: the retry prompt no longer invites a new query, and creation outcomes are classified exactly as
+Nimble's billing table does. Every number in this README was measured, not estimated.

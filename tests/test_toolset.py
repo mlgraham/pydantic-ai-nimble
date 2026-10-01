@@ -1,5 +1,6 @@
 """R4: the toolset registers nimble_research and an agent calls it. R5: retries never create a second billable run
-unless creation was definitely rejected. R6: the model sees the compact text; the full result is kept on the toolset."""
+unless Nimble says nothing was created (a 429). R6: the model sees the compact text; the full result is kept on the
+toolset."""
 
 from __future__ import annotations
 
@@ -107,7 +108,10 @@ async def test_timeout_then_retry_collects_the_same_run(settings: NimbleSettings
     assert result_route.call_count == 1 and poll_route.call_count >= 2
     retries = parts(result, "retry-prompt")
     assert len(retries) == 1 and f"run {RUN_ID}" in retries[0].model_response()
-    assert "same query to collect" in retries[0].model_response()
+    prompt = retries[0].model_response()
+    assert "nimble_research again with the same query to collect this existing run" in prompt
+    assert "narrower" not in prompt, "the prompt must not invite a new query, which would be a new billable run"
+    assert "separate billable run" in prompt
     returns = [part.content for part in parts(result, "tool-return")]
     assert len(returns) == 1 and returns[0].startswith("Answer (Nimble confidence: high")
     assert toolset.pending == {} and toolset.last_result is not None
@@ -139,17 +143,31 @@ async def test_ambiguous_create_reaches_the_developer_without_a_model_retry(
     assert create.call_count == 1 and toolset.pending == {}
 
 
-async def test_create_rejected_with_5xx_reaches_the_developer(
+async def test_create_5xx_is_unknown_and_reaches_the_developer(
     toolset: NimbleToolset, mock_api: respx.MockRouter
 ) -> None:
     create = mock_api.post("/agents/runs").mock(return_value=httpx.Response(503, text="upstream"))
     agent = Agent(TestModel(), toolsets=[toolset])
-    with pytest.raises(NimbleAPIError) as excinfo:
+    with pytest.raises(NimbleCreateAmbiguousError) as excinfo:
         await agent.run("q")
-    assert excinfo.value.phase == "create" and create.call_count == 1
+    assert excinfo.value.status_code == 503 and create.call_count == 1 and toolset.pending == {}
 
 
-async def test_create_rate_limited_is_retried_once_because_it_was_definitely_rejected(
+async def test_custom_tool_name_appears_in_the_recovery_prompt(
+    settings: NimbleSettings, mock_api: respx.MockRouter
+) -> None:
+    fast = settings.model_copy(update={"deadline_s": 0.05, "poll_initial_s": 0.01, "poll_max_s": 0.01})
+    mock_api.post("/agents/runs").mock(return_value=fixture_response("create"))
+    mock_api.get(f"/agents/{AGENT_ID}/runs/{RUN_ID}").mock(return_value=fixture_response("running"))
+    async with httpx.AsyncClient() as http:
+        toolset = NimbleToolset(NimbleClient(fast, http_client=http), tool_name="web_research", max_retries=1)
+        agent = Agent(TestModel(), toolsets=[toolset])
+        with pytest.raises(UnexpectedModelBehavior):
+            await agent.run("q")
+    assert toolset.tool_name == "web_research" and list(toolset.pending.values()) == [(AGENT_ID, RUN_ID)]
+
+
+async def test_create_rate_limited_is_retried_once_because_nothing_was_created(
     toolset: NimbleToolset, mock_api: respx.MockRouter
 ) -> None:
     create = mock_api.post("/agents/runs").mock(

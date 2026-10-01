@@ -7,7 +7,8 @@ Shape measured on a live run (tests/fixtures):
 
 Rules, from Nimble's own connector documentation:
 - Run creation is billable and not idempotent and there is no idempotency key, so the create call is issued
-  exactly once. A response is a definite outcome; no response is `NimbleCreateAmbiguousError`.
+  exactly once. Per Nimble's billing table, only a 429 means nothing was created; no response, a timeout, a 408
+  or a 5xx is unknown and raises `NimbleCreateAmbiguousError`, never resubmitted. Other 4xx are reported as is.
 - A client-side deadline does not stop the run. A timeout carries the run identity and `collect()` fetches
   the result later.
 - Reads (poll, result) are safe to retry and are, within the deadline.
@@ -47,6 +48,7 @@ class _Budget:
         self.started = time.monotonic()
         self.run_id: str | None = None
         self.web_search_agent_id: str | None = None
+        self.create_in_flight = False
 
     def elapsed(self) -> float:
         return time.monotonic() - self.started
@@ -118,6 +120,11 @@ class NimbleClient:
                 logger.info("nimble run %s created (effort=%s)", run.id, run.effort)
                 return await self._finish(run, budget)
         except TimeoutError as error:
+            if budget.create_in_flight:
+                # The deadline expired with the create request sent and unanswered: the same unknown as a timeout.
+                raise NimbleCreateAmbiguousError(
+                    f"deadline of {budget.deadline_s:.0f}s expired while the create request was in flight"
+                ) from error
             raise budget.timeout() from error
 
     async def collect(
@@ -134,7 +141,7 @@ class NimbleClient:
             raise budget.timeout() from error
 
     async def create_run(self, body: dict[str, Any], *, budget: _Budget | None = None) -> RunInfo:
-        """Issue the create request exactly once. No response at all is ambiguous and is never re-sent."""
+        """Issue the create request exactly once. Anything but a clear answer is ambiguous and never re-sent."""
         payload = await self._request("POST", "/agents/runs", json=body, budget=budget, phase="create")
         return RunInfo.model_validate(payload)
 
@@ -201,6 +208,8 @@ class NimbleClient:
                 if left <= 0:
                     raise budget.timeout()
                 timeout = min(timeout, left)
+            if creating and budget is not None:
+                budget.create_in_flight = True
             try:
                 response = await self._http.request(method, url, json=json, headers=headers, timeout=timeout)
             except (httpx.TimeoutException, httpx.TransportError) as error:
@@ -214,6 +223,10 @@ class NimbleClient:
                     ) from error
             else:
                 status = response.status_code
+                if creating and budget is not None:
+                    budget.create_in_flight = False
+                if creating and (status == 408 or status >= 500):
+                    raise NimbleCreateAmbiguousError(_text(response), status_code=status, body=_text(response))
                 if status in (401, 403):
                     raise NimbleAuthError(f"Nimble rejected the API key ({status}): {_text(response)}")
                 if status < 300:

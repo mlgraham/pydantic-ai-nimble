@@ -9,10 +9,12 @@ What a retry means here, given that Nimble bills every run and offers no idempot
 - A run that timed out, or whose poll or result fetch failed after the client's own retries, is remembered by
   query. The model gets one `ModelRetry`; calling the tool again with the same query collects that same run
   instead of creating another. A different query is new work the model asked for.
-- A create request that got no response (`NimbleCreateAmbiguousError`) and a create that was answered with an
-  error are never turned into a `ModelRetry`: a run may already exist, or the request was definitely rejected
-  for a reason the model cannot fix. They reach the developer. The one exception is a 429 on creation, which
-  is a definite rejection and safe to try again.
+- A create whose outcome is unknown (`NimbleCreateAmbiguousError`: no response, timeout, 408, 5xx) and a create
+  answered with another 4xx are never turned into a `ModelRetry`: a run may already exist, or the request was
+  rejected for a reason the model cannot fix. They reach the developer. The one exception is a 429 on creation,
+  where Nimble says nothing was created, so trying again is safe.
+- `pending` is per toolset instance and keyed by the normalized query. It is a recovery handle, not a job store:
+  a different query is new work, and nothing here deduplicates across instances or processes.
 - Auth failures and other 4xx responses reach the developer unchanged.
 """
 
@@ -76,6 +78,7 @@ class NimbleToolset(FunctionToolset[Any]):
         self.on_result = on_result
         self.results: list[ResearchResult] = []
         self.pending: dict[str, tuple[str, str]] = {}
+        self.tool_name = tool_name
         self.add_function(self._research, takes_ctx=False, name=tool_name)
 
     async def _research(self, query: str, effort: ToolEffort | None = None) -> str:
@@ -108,8 +111,8 @@ class NimbleToolset(FunctionToolset[Any]):
                 self.pending[key] = (error.web_search_agent_id, error.run_id)
                 raise ModelRetry(
                     f"Nimble is still researching this (run {error.run_id}); it did not finish within "
-                    f"{error.deadline_s:.0f}s. Call nimble_research again with the same query to collect the "
-                    "answer, or ask something narrower."
+                    f"{error.deadline_s:.0f}s. Call {self.tool_name} again with the same query to collect this "
+                    "existing run. Changing the query starts a separate billable run and does not stop this one."
                 ) from error
             raise
         except NimbleRunFailedError as error:
@@ -122,7 +125,7 @@ class NimbleToolset(FunctionToolset[Any]):
                 raise ModelRetry("Nimble is rate limiting new research runs. Wait a moment and try again.") from error
             self._remember(key, error)
             raise ModelRetry(
-                "Nimble is rate limiting reads; the run continues. Call nimble_research again with the same query."
+                f"Nimble is rate limiting reads; the run continues. Call {self.tool_name} again with the same query."
             ) from error
         except NimbleAPIError as error:
             if error.phase == "create":
@@ -131,7 +134,7 @@ class NimbleToolset(FunctionToolset[Any]):
                 self._remember(key, error)
                 raise ModelRetry(
                     f"Nimble returned a transient error ({error.status_code}) while fetching run {error.run_id}; "
-                    "the run continues. Call nimble_research again with the same query to collect it."
+                    f"the run continues. Call {self.tool_name} again with the same query to collect it."
                 ) from error
             raise
         self.pending.pop(key, None)

@@ -302,17 +302,43 @@ async def test_create_with_no_response_is_ambiguous_and_not_resent(
     assert create.call_count == 1, "Nimble documents creation as billable and non-idempotent: never replayed"
 
 
-async def test_create_answered_with_5xx_is_definite_and_not_retried(
+@pytest.mark.parametrize("status", [408, 500, 503])
+async def test_create_answered_with_408_or_5xx_is_unknown_and_not_resent(
+    client: NimbleClient, mock_api: respx.MockRouter, status: int
+) -> None:
+    """Nimble's billing table: a 408 or 5xx on creation 'may have reached Nimble'; do not resubmit."""
+    create = mock_api.post("/agents/runs").mock(return_value=httpx.Response(status, text="upstream"))
+    with pytest.raises(NimbleCreateAmbiguousError, match="unknown") as excinfo:
+        await client.research("q")
+    assert excinfo.value.status_code == status and create.call_count == 1
+
+
+async def test_deadline_expiring_with_the_create_in_flight_is_ambiguous(settings: NimbleSettings) -> None:
+    """The create was sent and never answered before the deadline: the same unknown as a lost response."""
+    posts: list[str] = []
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        posts.append(request.method)
+        if request.method == "POST":
+            await asyncio.sleep(0.5)
+        return fixture_response("create")
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler), base_url=BASE) as http:
+        with pytest.raises(NimbleCreateAmbiguousError, match="in flight"):
+            await NimbleClient(settings, http_client=http).research("q", deadline_s=0.1)
+    assert posts == ["POST"], "one create, never resent"
+
+
+async def test_create_rejected_with_other_4xx_is_reported_as_is(
     client: NimbleClient, mock_api: respx.MockRouter
 ) -> None:
-    create = mock_api.post("/agents/runs").mock(return_value=httpx.Response(503, text="upstream down"))
+    create = mock_api.post("/agents/runs").mock(return_value=httpx.Response(400, text="bad input"))
     with pytest.raises(NimbleAPIError) as excinfo:
         await client.research("q")
-    assert excinfo.value.status_code == 503 and excinfo.value.phase == "create"
-    assert create.call_count == 1
+    assert excinfo.value.status_code == 400 and excinfo.value.phase == "create" and create.call_count == 1
 
 
-async def test_create_rate_limited_is_a_definite_rejection(client: NimbleClient, mock_api: respx.MockRouter) -> None:
+async def test_create_rate_limited_means_nothing_was_created(client: NimbleClient, mock_api: respx.MockRouter) -> None:
     create = mock_api.post("/agents/runs").mock(return_value=httpx.Response(429, text="slow down"))
     with pytest.raises(NimbleRateLimitError) as excinfo:
         await client.research("q")
