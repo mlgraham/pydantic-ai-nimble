@@ -114,32 +114,36 @@ class ResearchResult(_Lenient):
         return found
 
     def graded_claims(self) -> list[Claim]:
-        """Claims that carry a callout and at least one citation, in callout order."""
+        """Claims that carry a callout, in callout order. A claim with no citation is kept: Nimble grades such a
+        claim 'low' on purpose, and that warning belongs in front of the model."""
         return sorted(
-            (claim for claim in self.claims if claim.callout is not None and claim.citations),
-            key=lambda claim: claim.callout or 0,
+            (claim for claim in self.claims if claim.callout is not None), key=lambda claim: claim.callout or 0
         )
 
-    def compact(self, max_excerpt_chars: int = 200, urls_per_claim: int = 1, max_sources: int = 12) -> str:
+    def compact(self, max_sources: int = 12, max_excerpt_chars: int = 200, *, urls_per_claim: int = 1) -> str:
         """The string handed to the model.
 
         Nimble's answer is kept whole, including the numbered source index it ends with; nothing is renumbered.
-        Underneath, the trust report is attached as one line per graded claim, keyed by the claim's `callout`,
+        Underneath, the trust report is attached as one line per reported claim, keyed by the claim's `callout`,
         which is the `[n]` marker the answer uses for it: Nimble's confidence grade, the cited page, an excerpt
-        when Nimble returned one. Markers without a graded claim are not listed. If a claim cites a different
-        page than the answer's own index gives for that marker, the line says so instead of hiding it. A result
-        with no claims gets a capped inventory of the pages Nimble consulted, labelled as not being the answer's
-        numbering.
+        when Nimble returned one. A claim with no citation is still listed with its grade and Nimble's reasoning,
+        because that is how Nimble marks a statement it could not support. Markers without a reported claim are
+        not listed. If a claim cites a different page than the answer's own index gives for that marker, the line
+        says so instead of hiding it. A result with no claims gets a capped inventory of the pages Nimble
+        consulted, labelled as not being the answer's numbering.
         """
         header = f"Answer (Nimble confidence: {self.confidence or 'unknown'}, {self.elapsed_s:.1f}s):"
         lines = [header, self.answer.strip()]
         claims = self.graded_claims()
         index = self.answer_index()
         if claims:
-            lines += ["", "Nimble's confidence per cited claim (numbers are the [n] markers in the answer):"]
+            lines += ["", "Nimble's confidence per reported claim (numbers are the [n] markers in the answer):"]
             for claim in claims:
                 marker = claim.callout
                 lines.append(f"[{marker}] {claim.confidence or 'ungraded'}")
+                if not claim.citations:
+                    reason = f": {_clip_excerpt(claim.reasoning, max_excerpt_chars)}" if claim.reasoning else ""
+                    lines.append(f"    no supporting citation in the trust report{reason}")
                 for citation in claim.citations[:urls_per_claim]:
                     title = f"{citation.title}: " if citation.title else ""
                     lines.append(f"    {title}{citation.url}")
@@ -149,7 +153,8 @@ class ResearchResult(_Lenient):
                 if extra > 0:
                     lines.append(f"    (+{extra} more citation{'s' if extra > 1 else ''})")
                 expected = index.get(marker) if marker is not None else None
-                if expected and expected not in {citation.url.rstrip(".,;)") for citation in claim.citations}:
+                cited = {citation.url.rstrip(".,;)") for citation in claim.citations}
+                if cited and expected and expected not in cited:
                     lines.append(f"    (note: the answer's own [{marker}] entry is a different page: {expected})")
         elif self.sources:
             lines += ["", f"Pages Nimble consulted (an inventory, not the answer's numbering; first {max_sources}):"]

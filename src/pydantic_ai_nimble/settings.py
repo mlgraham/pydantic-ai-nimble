@@ -1,11 +1,12 @@
-"""Configuration. The key comes from an explicit argument or NIMBLE_API_KEY; it is stored as a SecretStr so it
-never appears in repr, logs, or exception text."""
+"""Configuration. The key comes from an explicit argument or NIMBLE_API_KEY; it is stored as a SecretStr so the
+stored value never appears in repr or logs, and this package never interpolates it into a message. Text a server
+echoes back is surfaced as sent."""
 
 from __future__ import annotations
 
 import os
 
-from pydantic import BaseModel, ConfigDict, Field, SecretStr
+from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator
 
 from pydantic_ai_nimble.errors import NimbleAuthError
 
@@ -27,12 +28,24 @@ class NimbleSettings(BaseModel):
 
     api_key: SecretStr
     base_url: str = DEFAULT_BASE_URL
-    deadline_s: float = Field(default=120.0, gt=0, description="Overall budget for one research call, in seconds.")
+    deadline_s: float = Field(
+        default=300.0,
+        gt=0,
+        description="Wall-clock budget for one research call. Low effort finishes in about a minute; medium has "
+        "measured over 90 s; Nimble suggests much longer for high.",
+    )
     poll_initial_s: float = Field(default=1.0, gt=0)
     poll_max_s: float = Field(default=8.0, gt=0)
     request_timeout_s: float = Field(default=30.0, gt=0, description="Per-HTTP-request timeout.")
     max_retries: int = Field(default=3, ge=0, description="Retries for 429, 5xx and transport errors.")
     retry_backoff_s: float = Field(default=0.5, ge=0, description="First retry delay; doubles each time.")
+
+    @field_validator("api_key")
+    @classmethod
+    def _key_not_blank(cls, value: SecretStr) -> SecretStr:
+        if not value.get_secret_value().strip():
+            raise ValueError(MISSING_KEY_MESSAGE)
+        return value
 
     @classmethod
     def from_env(cls, api_key: str | None = None, **overrides: object) -> NimbleSettings:

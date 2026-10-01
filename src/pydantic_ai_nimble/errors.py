@@ -1,13 +1,19 @@
 """Error taxonomy. One exception per behavior the caller must choose between.
 
 - NimbleAuthError: the key is missing or rejected. Nothing retries this; it is raised to the developer.
-- NimbleRateLimitError: 429 after the retry budget. Transient from the model's point of view.
-- NimbleTimeoutError: the overall deadline passed while the run was still active. Carries the run id.
+- NimbleCreateAmbiguousError: the create request got no response. A run may already be running and billed.
+  Nimble documents run creation as billable and not idempotent, with no idempotency key, so this is never
+  retried automatically; reconcile against the run history instead.
+- NimbleRateLimitError: 429 after the retry budget (reads) or on creation (a definite rejection, so a later
+  attempt is safe).
+- NimbleTimeoutError: the overall deadline passed. Carries the run identity once a run exists; the run keeps
+  going on Nimble's side and its result stays fetchable with `NimbleClient.collect`.
 - NimbleRunFailedError: Nimble finished the run with status "failed".
-- NimbleAPIError: any other non-success response, with status code and the raw body text.
+- NimbleAPIError: any other non-success response, with status code, raw body text, and the phase it came from.
 
 Error bodies are kept as text, never parsed on the assumption that they are JSON: the 401 body is plain text.
-No exception message ever contains the API key.
+The stored API key is never interpolated into a message by this package; a body echoed by the server is
+surfaced as the server sent it, clipped.
 """
 
 from __future__ import annotations
@@ -21,43 +27,79 @@ class NimbleAuthError(NimbleError):
     """The API key is missing, malformed, or rejected (401 / 403)."""
 
 
+class NimbleCreateAmbiguousError(NimbleError):
+    """The create request produced no response. A run may or may not exist; do not create another blindly."""
+
+    def __init__(self, cause: str) -> None:
+        self.cause = cause
+        super().__init__(
+            "Nimble's run-creation request got no response ("
+            f"{_clip(cause, 120)}). A run may already be running and billed, so it was not re-sent; check the "
+            "run history in the Nimble dashboard before creating another."
+        )
+
+
 class NimbleAPIError(NimbleError):
     """A non-success HTTP response that is not an auth failure."""
 
-    def __init__(self, status_code: int, body: str, *, method: str = "", path: str = "") -> None:
+    def __init__(
+        self,
+        status_code: int,
+        body: str,
+        *,
+        method: str = "",
+        path: str = "",
+        phase: str = "",
+        run_id: str | None = None,
+        web_search_agent_id: str | None = None,
+    ) -> None:
         self.status_code = status_code
         self.body = body
         self.method = method
         self.path = path
+        self.phase = phase
+        self.run_id = run_id
+        self.web_search_agent_id = web_search_agent_id
         where = f" {method} {path}" if method else ""
         super().__init__(f"Nimble API returned {status_code}{where}: {_clip(body)}")
 
 
 class NimbleRateLimitError(NimbleAPIError):
-    """429 that persisted past the retry budget."""
+    """429: on creation a definite rejection; on reads, persisted past the retry budget."""
 
 
 class NimbleRunFailedError(NimbleAPIError):
     """The run reached status 'failed'. `body` holds Nimble's error text."""
 
-    def __init__(self, run_id: str, body: str) -> None:
-        self.run_id = run_id
+    def __init__(self, run_id: str, body: str, *, web_search_agent_id: str | None = None) -> None:
         NimbleError.__init__(self, f"Nimble run {run_id} failed: {_clip(body)}")
         self.status_code = 200
         self.body = body
         self.method = ""
         self.path = ""
+        self.phase = "poll"
+        self.run_id = run_id
+        self.web_search_agent_id = web_search_agent_id
 
 
 class NimbleTimeoutError(NimbleError):
-    """The run was still active when the deadline passed."""
+    """The deadline passed. Once a run exists its identity is here, and the run is still going at Nimble."""
 
-    def __init__(self, run_id: str | None, elapsed_s: float, deadline_s: float) -> None:
+    def __init__(
+        self,
+        run_id: str | None,
+        elapsed_s: float,
+        deadline_s: float,
+        *,
+        web_search_agent_id: str | None = None,
+    ) -> None:
         self.run_id = run_id
+        self.web_search_agent_id = web_search_agent_id
         self.elapsed_s = elapsed_s
         self.deadline_s = deadline_s
         which = f"run {run_id}" if run_id else "the request"
-        super().__init__(f"Nimble did not finish {which} within {deadline_s:.0f}s (waited {elapsed_s:.1f}s)")
+        tail = "; the run continues on Nimble's side and its result stays fetchable" if run_id else ""
+        super().__init__(f"Nimble did not finish {which} within {deadline_s:.0f}s (waited {elapsed_s:.1f}s){tail}")
 
 
 def _clip(text: str, limit: int = 300) -> str:

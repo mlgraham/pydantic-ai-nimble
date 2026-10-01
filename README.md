@@ -31,9 +31,11 @@ provider. The model and the research are independent: the toolset works with wha
 `NimbleToolset` registers one tool, `nimble_research(query, effort)`. The tool's schema comes from its docstring,
 so the model knows when to call it and what to put in `query`. When called, the toolset's `NimbleClient`:
 
-1. `POST /v2/agents/runs` creates a Web Search Agent run (202, `is_active: true`).
-2. Polls `GET /v2/agents/{agent_id}/runs/{id}` with backoff (1, 2, 4, 8 s, capped) until `is_active` is false,
-   all under one deadline (120 s by default).
+1. `POST /v2/agents/runs` creates a Web Search Agent run (202, `is_active: true`), exactly once. Nimble bills
+   every run and offers no idempotency key, so a create request that gets no response is reported as ambiguous
+   and never replayed.
+2. Polls `GET /v2/agents/{agent_id}/runs/{id}` with backoff (1, 2, 4, 8 s, capped) until `is_active` is false.
+   The whole call runs inside one wall-clock deadline (300 s by default), enforced with `asyncio.timeout`.
 3. `GET .../result` fetches the answer (`output.content`) and the trust report (`output.trust`).
 4. Parses it into a typed `ResearchResult` and hands the model a compact view: Nimble's answer in full, including
    the numbered source index it ends with, then one line per graded claim keyed by the same `[n]` marker, with
@@ -44,9 +46,12 @@ The full `ResearchResult` (every source, every claim, the raw trust report) stay
 the model did not need to read.
 
 Failures map to one behavior each. A missing key raises `NimbleAuthError` when the toolset is constructed, before
-any model call; a rejected key raises it on the first tool call and is never retried. Timeouts, rate limits, 5xx
-and transport errors become a single `ModelRetry`, so the model can narrow the question or try again once. Other
-4xx responses propagate to you unchanged. A timeout carries the run id and the deadline that applied.
+any model call; a rejected key raises it on the first tool call and is never retried. Reads (polling, fetching the
+result) are retried under the deadline. Creation is not: a create that Nimble answers with an error is reported as
+it is, and a create that gets no response raises `NimbleCreateAmbiguousError` to you, because a billable run may
+already exist. A timeout, or a read that keeps failing, carries the run id and gives the model one `ModelRetry`;
+calling the tool again with the same query collects that same run instead of starting another, and the handle
+stays in `toolset.pending` for `client.collect` if the agent gives up. Other 4xx responses propagate unchanged.
 
 ## Why this shape
 
@@ -77,14 +82,17 @@ Mastra package; none of them targets PydanticAI's toolset interface, which is th
 - **Nothing is renumbered.** Nimble's answer ends with its own numbered source index, and its claim callouts use
   the same numbers. The flat `trust.sources` inventory is in a different order, so the compact view never uses it
   as a bibliography. If a claim cites a different page than the answer's index gives for that marker, the line
-  says so.
+  says so. A claim Nimble graded `low` with no citation is listed with that grade; the warning is the point.
 - **One tool.** Only the Web Search Agent. Nimble's search, extract, map and crawl endpoints are out of scope;
   the toolset pattern makes them additive.
+- **A local timeout does not stop the run.** Nimble keeps working and bills it. This package keeps the handle so
+  the result can still be collected, and never starts a replacement on its own.
 - **No streaming.** The run's progress events are not surfaced; the deadline is the only feedback during a run.
 - **Results live on the toolset instance.** `toolset.results` is per instance, not per agent run. Use
   `on_result` or one toolset per run if you need isolation under concurrency.
 - **Effort is capped at `high` in the tool schema.** Nimble's `x-high` is reachable through `NimbleClient`
-  directly; it was left out of the model-facing enum because it can take many minutes.
+  directly; it was left out of the model-facing enum because it can take many minutes. Low effort has measured
+  17 to 51 s, medium over 90 s; raise `NIMBLE_DEADLINE_S` for high, as Nimble's own connectors advise.
 - **The sources are the guarantee, not the conclusion.** On one question, two models given the same Nimble result
   reached different conclusions about what it meant. The toolset delivers the same cited sources either way;
   interpretation is the model's. Keep the `[n]` markers in the agent's instructions so readers can check.
@@ -108,5 +116,7 @@ by hand: the choice of PydanticAI and the direct API, the error taxonomy and whi
 own the polling loop rather than expose it as tools, and the reading of the trust report. An independent review
 pass by GPT 6 Pro over the first public revision found that the compact view had renumbered sources the answer
 already numbered, that the example configuration dropped the API version from the base URL, and that timeout
-errors reported the wrong deadline; those fixes are in this revision. Every number in this README was measured,
-not estimated.
+errors reported the wrong deadline. A second pass found that creation was replayed after a lost response, which
+Nimble's own connector documentation rules out, that the deadline did not bound a slowly streamed body, and that
+uncited low-confidence claims were dropped from the compact view. All of it is fixed in this revision. Every
+number in this README was measured, not estimated.

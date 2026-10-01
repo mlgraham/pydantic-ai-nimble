@@ -10,6 +10,7 @@ from pydantic_ai_nimble.client import NimbleClient
 from pydantic_ai_nimble.errors import (
     NimbleAPIError,
     NimbleAuthError,
+    NimbleCreateAmbiguousError,
     NimbleError,
     NimbleRateLimitError,
     NimbleRunFailedError,
@@ -25,6 +26,7 @@ __all__ = [
     "NimbleAPIError",
     "NimbleAuthError",
     "NimbleClient",
+    "NimbleCreateAmbiguousError",
     "NimbleError",
     "NimbleRateLimitError",
     "NimbleRunFailedError",
@@ -35,4 +37,4 @@ __all__ = [
     "RunInfo",
     "Source",
 ]
-__version__ = "0.1.1"
+__version__ = "0.1.2"
