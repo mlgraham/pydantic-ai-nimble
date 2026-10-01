@@ -53,33 +53,91 @@ async def test_result_fields_match_the_captured_shape(client: NimbleClient, mock
     assert claim.citations[0].excerpts is None, "excerpts were null on the captured low-effort run"
 
 
-async def test_compact_output_keeps_nimble_numbering(client: NimbleClient, mock_api: respx.MockRouter) -> None:
+async def test_compact_keeps_the_answer_and_grades_claims_by_callout(
+    client: NimbleClient, mock_api: respx.MockRouter
+) -> None:
     route_success(mock_api)
     result = await client.research("q")
     text = result.compact()
-    assert text.startswith("Answer (confidence: high")
-    answer_part, sources_part = text.split("Sources (numbers match the [n] markers above):")
-    assert result.cited_markers() == list(range(1, 10)), "the captured answer cites [1] to [9]"
-    assert len(result.sources) == 9, "and lists nine sources in that order"
-    for marker in result.cited_markers():
-        assert f"[{marker}]" in answer_part
-        assert f"\n[{marker}] " in sources_part, "every marker resolves to a numbered source"
-    assert "[10]" not in sources_part
-    assert sources_part.count("https://") == 9
-    assert "confidence: high" in sources_part, "claim grades attach to the markers they grade"
-    assert '"' not in sources_part, "no excerpt lines when excerpts are null"
-    assert len(text) < 6000
+
+    # The answer ends with its own numbered source index; it is kept verbatim and nothing is renumbered.
+    index = result.answer_index()
+    assert sorted(index) == list(range(1, 10)), "the captured answer indexes [1] to [9] itself"
+    assert result.answer.strip() in text
+    answer_part, trust_part = text.split(
+        "Nimble's confidence per cited claim (numbers are the [n] markers in the answer):"
+    )
+
+    # Exact identity: every graded claim's citation is the page the answer's own index gives for that marker.
+    graded = result.graded_claims()
+    assert [claim.callout for claim in graded] == [1, 3, 4, 5, 7, 8, 9], "callouts 2 and 6 are not graded, not invented"
+    for claim in graded:
+        assert claim.citations[0].url == index[claim.callout]
+        assert f"\n[{claim.callout}] {claim.confidence}\n    " in trust_part
+        assert f"    {claim.citations[0].title}: {claim.citations[0].url}" in trust_part
+    assert "\n[2] " not in trust_part and "\n[6] " not in trust_part
+    assert "different page" not in trust_part, "the captured claims agree with the answer's index"
+    assert trust_part.count("(+1 more citation)") == 2, "claims 1 and 5 carry two citations"
+    assert '"' not in trust_part, "no excerpt lines when excerpts are null"
 
 
-async def test_compact_caps_uncited_sources(client: NimbleClient, mock_api: respx.MockRouter) -> None:
+async def test_compact_ignores_the_order_of_the_source_inventory(
+    client: NimbleClient, mock_api: respx.MockRouter
+) -> None:
+    """trust.sources is not in the answer's order (measured); the compact view must not depend on it."""
     captured = load("result")["body"]
-    captured["output"]["content"] = "Only the first source matters [1]."
+    baseline_routes = route_success(mock_api)
+    baseline = (await client.research("q")).compact()
+    captured["output"]["trust"]["sources"] = list(reversed(captured["output"]["trust"]["sources"]))
+    baseline_routes["poll"].mock(return_value=fixture_response("completed"))
+    baseline_routes["result"].mock(return_value=httpx.Response(200, json=captured))
+    shuffled = (await client.research("q")).compact()
+    assert shuffled == baseline
+
+
+async def test_compact_flags_a_citation_that_disagrees_with_the_answer(
+    client: NimbleClient, mock_api: respx.MockRouter
+) -> None:
+    captured = load("result")["body"]
+    claim = next(c for c in captured["output"]["trust"]["claims"] if c["callout"] == 7)
+    claim["citations"][0]["url"] = "https://example.com/somewhere-else"
+    mock_api.post("/agents/runs").mock(return_value=fixture_response("create"))
+    mock_api.get(f"/agents/{AGENT_ID}/runs/{RUN_ID}").mock(return_value=fixture_response("completed"))
+    mock_api.get(f"/agents/{AGENT_ID}/runs/{RUN_ID}/result").mock(return_value=httpx.Response(200, json=captured))
+    text = (await client.research("q")).compact()
+    assert "(note: the answer's own [7] entry is a different page: https://regulations.ai/" in text
+
+
+async def test_compact_includes_an_excerpt_when_nimble_returns_one(
+    client: NimbleClient, mock_api: respx.MockRouter
+) -> None:
+    captured = load("result")["body"]
+    claim = next(c for c in captured["output"]["trust"]["claims"] if c["callout"] == 1)
+    claim["citations"][0]["excerpts"] = ["  The Commission   issued guidelines " + "x" * 300]
+    mock_api.post("/agents/runs").mock(return_value=fixture_response("create"))
+    mock_api.get(f"/agents/{AGENT_ID}/runs/{RUN_ID}").mock(return_value=fixture_response("completed"))
+    mock_api.get(f"/agents/{AGENT_ID}/runs/{RUN_ID}/result").mock(return_value=httpx.Response(200, json=captured))
+    text = (await client.research("q")).compact(max_excerpt_chars=60)
+    quoted = [line for line in text.splitlines() if line.strip().startswith('"')]
+    assert (
+        len(quoted) == 1
+        and quoted[0].strip().startswith('"The Commission issued guidelines')
+        and len(quoted[0].strip()) <= 62
+    )
+
+
+async def test_compact_without_claims_lists_an_inventory_not_a_bibliography(
+    client: NimbleClient, mock_api: respx.MockRouter
+) -> None:
+    captured = load("result")["body"]
+    captured["output"]["trust"]["claims"] = []
     mock_api.post("/agents/runs").mock(return_value=fixture_response("create"))
     mock_api.get(f"/agents/{AGENT_ID}/runs/{RUN_ID}").mock(return_value=fixture_response("completed"))
     mock_api.get(f"/agents/{AGENT_ID}/runs/{RUN_ID}/result").mock(return_value=httpx.Response(200, json=captured))
     text = (await client.research("q")).compact(max_sources=3)
-    sources_part = text.split("Sources (numbers match the [n] markers above):")[1]
-    assert sources_part.count("\n[") == 3 and "[4]" not in sources_part, "uncited sources past the cap are dropped"
+    inventory = text.split("Pages Nimble consulted (an inventory, not the answer's numbering; first 3):")[1]
+    assert inventory.count("https://") == 3
+    assert "[1]" not in inventory, "no numbers are assigned to the inventory"
 
 
 async def test_run_failed_status_raises(client: NimbleClient, mock_api: respx.MockRouter) -> None:
@@ -126,6 +184,28 @@ async def test_deadline_raises_timeout_with_run_id(settings: NimbleSettings, moc
     assert excinfo.value.deadline_s == 0.2
     assert 0.2 <= excinfo.value.elapsed_s < 1.0
     assert poll.call_count >= 1 and result.call_count == 0
+
+
+async def test_timeout_during_result_fetch_keeps_run_id_and_the_per_call_deadline(
+    settings: NimbleSettings, mock_api: respx.MockRouter
+) -> None:
+    """F2 metadata: a deadline override, a known run, and a retry sleep that must not overrun the budget."""
+    slow_retry = settings.model_copy(update={"retry_backoff_s": 0.5, "max_retries": 3})
+    mock_api.post("/agents/runs").mock(return_value=fixture_response("create"))
+    mock_api.get(f"/agents/{AGENT_ID}/runs/{RUN_ID}").mock(return_value=fixture_response("completed"))
+    result = mock_api.get(f"/agents/{AGENT_ID}/runs/{RUN_ID}/result").mock(
+        return_value=httpx.Response(503, text="busy")
+    )
+
+    async with httpx.AsyncClient() as http:
+        with pytest.raises(NimbleTimeoutError) as excinfo:
+            await NimbleClient(slow_retry, http_client=http).research("q", deadline_s=0.3)
+
+    error = excinfo.value
+    assert error.run_id == RUN_ID, "the run was created, so the timeout names it"
+    assert error.deadline_s == 0.3, "the per-call override, not the settings default"
+    assert 0.3 <= error.elapsed_s < 0.6, "elapsed is real, and the 0.5 s retry sleep was clamped to the budget"
+    assert result.call_count >= 1
 
 
 async def test_503_is_retried_then_succeeds(client: NimbleClient, mock_api: respx.MockRouter) -> None:

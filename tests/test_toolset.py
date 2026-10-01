@@ -55,8 +55,8 @@ async def test_agent_calls_the_tool_and_gets_the_compact_answer(
         if part.part_kind == "tool-return" and part.tool_name == "nimble_research"
     ]
     assert len(tool_returns) == 1
-    assert tool_returns[0].startswith("Answer (confidence: high")
-    assert "Sources (numbers match the [n] markers above):" in tool_returns[0]
+    assert tool_returns[0].startswith("Answer (Nimble confidence: high")
+    assert "Nimble's confidence per cited claim (numbers are the [n] markers in the answer):" in tool_returns[0]
 
 
 def test_missing_key_fails_at_construction_before_any_model_call(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -153,4 +153,5 @@ async def test_full_result_is_kept_and_the_model_sees_a_bounded_view(
         part.content for message in result.all_messages() for part in message.parts if part.part_kind == "tool-return"
     )
     assert len(tool_return) < 6000
-    assert tool_return.count("\n[") == 9, "all nine are cited by the answer, so the cap of 3 does not drop them"
+    trust_part = tool_return.split("Nimble's confidence per cited claim")[1]
+    assert trust_part.count("\n[") == 7, "one graded line per claim; nothing renumbered"

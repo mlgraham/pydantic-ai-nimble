@@ -14,11 +14,11 @@ result = agent.run_sync("What changed in the EU AI Act this month?")
 ## Quick start
 
 ```sh
-git clone <this repo> && cd pydantic-ai-nimble
+git clone https://github.com/mlgraham/pydantic-ai-nimble.git && cd pydantic-ai-nimble
 uv sync                                   # Python 3.11+, installs pydantic-ai and httpx
 cp .env.example .env                      # put NIMBLE_API_KEY and one model provider key in it
 uv run python examples/research_agent.py "What changed in the EU AI Act this month?"
-uv run pytest -q                          # 24 tests, no network, under two seconds
+uv run pytest -q                          # no network; a few seconds
 ```
 
 Get a Nimble key at [app.nimbleway.com](https://app.nimbleway.com). The example uses the first provider key it
@@ -35,16 +35,18 @@ so the model knows when to call it and what to put in `query`. When called, the 
 2. Polls `GET /v2/agents/{agent_id}/runs/{id}` with backoff (1, 2, 4, 8 s, capped) until `is_active` is false,
    all under one deadline (120 s by default).
 3. `GET .../result` fetches the answer (`output.content`) and the trust report (`output.trust`).
-4. Parses it into a typed `ResearchResult` and hands the model a compact view: the answer, then the numbered
-   sources that its `[n]` markers point at, with the confidence grade Nimble gave each claim.
+4. Parses it into a typed `ResearchResult` and hands the model a compact view: Nimble's answer in full, including
+   the numbered source index it ends with, then one line per graded claim keyed by the same `[n]` marker, with
+   Nimble's confidence grade and the cited page. Nothing is renumbered.
 
 The full `ResearchResult` (every source, every claim, the raw trust report) stays on the toolset as
 `toolset.last_result` / `toolset.results`, or flows to an `on_result` callback, so your code keeps everything
 the model did not need to read.
 
-Failures map to one behavior each. A missing or rejected key raises `NimbleAuthError` before any model call
-is made. Timeouts, rate limits, 5xx and transport errors become a single `ModelRetry`, so the model can narrow
-the question or try again once. Other 4xx responses propagate to you unchanged.
+Failures map to one behavior each. A missing key raises `NimbleAuthError` when the toolset is constructed, before
+any model call; a rejected key raises it on the first tool call and is never retried. Timeouts, rate limits, 5xx
+and transport errors become a single `ModelRetry`, so the model can narrow the question or try again once. Other
+4xx responses propagate to you unchanged. A timeout carries the run id and the deadline that applied.
 
 ## Why this shape
 
@@ -69,11 +71,13 @@ Mastra package; none of them targets PydanticAI's toolset interface, which is th
 
 ## Tradeoffs and limits
 
-- **Compact output by design.** The model sees the answer plus the cited sources, bounded in size. Excerpts are
-  included only when Nimble returns them (they were `null` on the captured low-effort run), so the model is never
-  shown a quote that does not exist.
-- **Numbering follows Nimble.** The `[n]` markers in Nimble's answer index its `trust.sources` list one-based;
-  the compact view keeps those numbers rather than renumbering, so citations stay resolvable.
+- **Compact by intent, not by hard limit.** The answer is kept whole; the trust report is reduced to one line per
+  graded claim, with excerpts only when Nimble returns them (they were `null` on the captured low-effort run), so
+  the model is never shown a quote that does not exist. A very long answer is not truncated.
+- **Nothing is renumbered.** Nimble's answer ends with its own numbered source index, and its claim callouts use
+  the same numbers. The flat `trust.sources` inventory is in a different order, so the compact view never uses it
+  as a bibliography. If a claim cites a different page than the answer's index gives for that marker, the line
+  says so.
 - **One tool.** Only the Web Search Agent. Nimble's search, extract, map and crawl endpoints are out of scope;
   the toolset pattern makes them additive.
 - **No streaming.** The run's progress events are not surfaced; the deadline is the only feedback during a run.
@@ -101,5 +105,8 @@ Mastra package; none of them targets PydanticAI's toolset interface, which is th
 Claude Code was used throughout, under a dated project ledger. It drafted the client, models, toolset, tests and
 this README, and it ran the live capture that produced the fixtures. The design decisions were made and reviewed
 by hand: the choice of PydanticAI and the direct API, the error taxonomy and which errors retry, the decision to
-own the polling loop rather than expose it as tools, and the reading of the trust report that keeps Nimble's
-citation numbering. Every number in this README was measured, not estimated.
+own the polling loop rather than expose it as tools, and the reading of the trust report. An independent review
+pass by GPT 6 Pro over the first public revision found that the compact view had renumbered sources the answer
+already numbered, that the example configuration dropped the API version from the base URL, and that timeout
+errors reported the wrong deadline; those fixes are in this revision. Every number in this README was measured,
+not estimated.

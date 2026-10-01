@@ -102,36 +102,58 @@ class ResearchResult(_Lenient):
         """The distinct `[n]` markers that appear in the answer, ascending."""
         return sorted({int(match) for match in re.findall(r"\[(\d+)\]", self.answer)})
 
-    def compact(self, max_sources: int = 12, max_excerpt_chars: int = 200) -> str:
+    def answer_index(self) -> dict[int, str]:
+        """The numbered source list Nimble writes at the end of its own answer, as marker -> url.
+
+        Empty when the answer carries no such list. This is the authoritative resolution of the answer's `[n]`
+        markers; the flat `trust.sources` inventory is not in the same order (measured on a captured run).
+        """
+        found: dict[int, str] = {}
+        for marker, url in re.findall(r"^\s*\[(\d+)\][^\n]*?(https?://\S+)", self.answer, flags=re.MULTILINE):
+            found.setdefault(int(marker), url.rstrip(".,;)"))
+        return found
+
+    def graded_claims(self) -> list[Claim]:
+        """Claims that carry a callout and at least one citation, in callout order."""
+        return sorted(
+            (claim for claim in self.claims if claim.callout is not None and claim.citations),
+            key=lambda claim: claim.callout or 0,
+        )
+
+    def compact(self, max_excerpt_chars: int = 200, urls_per_claim: int = 1, max_sources: int = 12) -> str:
         """The string handed to the model.
 
-        Nimble's answer carries `[n]` markers that index `trust.sources` one-based (measured: nine markers,
-        nine sources, in order). The list below keeps those numbers, so the model can quote `[3]` and have it
-        resolve. A claim whose `callout` matches a marker adds its confidence grade; an excerpt line appears only
-        when a citation carries non-empty excerpts. Sources beyond `max_sources` are dropped unless cited.
+        Nimble's answer is kept whole, including the numbered source index it ends with; nothing is renumbered.
+        Underneath, the trust report is attached as one line per graded claim, keyed by the claim's `callout`,
+        which is the `[n]` marker the answer uses for it: Nimble's confidence grade, the cited page, an excerpt
+        when Nimble returned one. Markers without a graded claim are not listed. If a claim cites a different
+        page than the answer's own index gives for that marker, the line says so instead of hiding it. A result
+        with no claims gets a capped inventory of the pages Nimble consulted, labelled as not being the answer's
+        numbering.
         """
-        lines = [f"Answer (confidence: {self.confidence or 'unknown'}, {self.elapsed_s:.1f}s):", self.answer.strip()]
-        if not self.sources:
-            return "\n".join(lines)
-        cited = set(self.cited_markers())
-        grade_by_marker = {claim.callout: claim.confidence for claim in self.claims if claim.callout is not None}
-        excerpt_by_url: dict[str, str] = {}
-        for claim in self.claims:
-            for citation in claim.citations:
-                if citation.excerpts and citation.url not in excerpt_by_url:
-                    excerpt_by_url[citation.url] = citation.excerpts[0]
-        lines += ["", "Sources (numbers match the [n] markers above):"]
-        for index, source in enumerate(self.sources, start=1):
-            if index > max_sources and index not in cited:
-                continue
-            tags = ", ".join(tag for tag in (source.source_category, source.type) if tag)
-            grade = grade_by_marker.get(index)
-            head = f"[{index}] {source.title}" if source.title else f"[{index}]"
-            meta = "; ".join(part for part in (tags, f"confidence: {grade}" if grade else "") if part)
-            lines.append(f"{head} ({meta})" if meta else head)
-            lines.append(f"    {source.url}")
-            if excerpt := excerpt_by_url.get(source.url):
-                lines.append(f'    "{_clip_excerpt(excerpt, max_excerpt_chars)}"')
+        header = f"Answer (Nimble confidence: {self.confidence or 'unknown'}, {self.elapsed_s:.1f}s):"
+        lines = [header, self.answer.strip()]
+        claims = self.graded_claims()
+        index = self.answer_index()
+        if claims:
+            lines += ["", "Nimble's confidence per cited claim (numbers are the [n] markers in the answer):"]
+            for claim in claims:
+                marker = claim.callout
+                lines.append(f"[{marker}] {claim.confidence or 'ungraded'}")
+                for citation in claim.citations[:urls_per_claim]:
+                    title = f"{citation.title}: " if citation.title else ""
+                    lines.append(f"    {title}{citation.url}")
+                    if citation.excerpts:
+                        lines.append(f'    "{_clip_excerpt(citation.excerpts[0], max_excerpt_chars)}"')
+                extra = len(claim.citations) - urls_per_claim
+                if extra > 0:
+                    lines.append(f"    (+{extra} more citation{'s' if extra > 1 else ''})")
+                expected = index.get(marker) if marker is not None else None
+                if expected and expected not in {citation.url.rstrip(".,;)") for citation in claim.citations}:
+                    lines.append(f"    (note: the answer's own [{marker}] entry is a different page: {expected})")
+        elif self.sources:
+            lines += ["", f"Pages Nimble consulted (an inventory, not the answer's numbering; first {max_sources}):"]
+            lines += [f"    {source.url}" for source in self.sources[:max_sources]]
         return "\n".join(lines)
 
 
